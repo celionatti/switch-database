@@ -1,0 +1,20 @@
+{
+    "name": "switch/database",
+    "description": "Switch Framework Database Package - Query Builder, Schema, Migrations, ORM",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "ext-pdo": "*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Switch\\Database\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Switch\\Database\\Tests\\": "tests/"
+        }
+    }
+}

@@ -1,0 +1,183 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Switch\Database\Connection;
+
+use PDO;
+use PDOException;
+use PDOStatement;
+use Switch\Database\Query\QueryBuilder;
+use Closure;
+use RuntimeException;
+
+class Connection
+{
+    private ?PDO $pdo = null;
+    
+    public function __construct(
+        private readonly ConnectionConfig $config
+    ) {
+    }
+
+    /**
+     * Create a quick SQLite connection.
+     *
+     * @param string $path SQLite database path or ':memory:'
+     * @return self
+     */
+    public static function sqlite(string $path = ':memory:'): self
+    {
+        return new self(new ConnectionConfig(
+            driver: 'sqlite',
+            database: $path
+        ));
+    }
+
+    /**
+     * Get the underlying PDO instance, creating it lazily if necessary.
+     *
+     * @return PDO
+     * @throws PDOException
+     */
+    public function getPdo(): PDO
+    {
+        if ($this->pdo === null) {
+            $this->pdo = $this->createPdoInstance();
+        }
+
+        return $this->pdo;
+    }
+
+    /**
+     * Create the PDO instance based on the configuration.
+     *
+     * @return PDO
+     */
+    private function createPdoInstance(): PDO
+    {
+        $options = $this->config->options + [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES => false,
+        ];
+
+        return new PDO(
+            $this->config->toDsn(),
+            $this->config->username,
+            $this->config->password,
+            $options
+        );
+    }
+
+    /**
+     * Execute a query and return the statement.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return PDOStatement
+     */
+    public function query(string $sql, array $bindings = []): PDOStatement
+    {
+        $statement = $this->getPdo()->prepare($sql);
+        $statement->execute($bindings);
+        
+        return $statement;
+    }
+
+    /**
+     * Execute a select query and return all results as an associative array.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return array<int, array<string, mixed>>
+     */
+    public function select(string $sql, array $bindings = []): array
+    {
+        return $this->query($sql, $bindings)->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /**
+     * Execute an insert statement and return the last insert ID.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return int|string
+     */
+    public function insert(string $sql, array $bindings = []): int|string
+    {
+        $this->query($sql, $bindings);
+        
+        return $this->getPdo()->lastInsertId();
+    }
+
+    /**
+     * Execute an update statement and return the number of affected rows.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return int
+     */
+    public function update(string $sql, array $bindings = []): int
+    {
+        return $this->query($sql, $bindings)->rowCount();
+    }
+
+    /**
+     * Execute a delete statement and return the number of affected rows.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return int
+     */
+    public function delete(string $sql, array $bindings = []): int
+    {
+        return $this->query($sql, $bindings)->rowCount();
+    }
+
+    /**
+     * Execute a general statement and return success boolean.
+     *
+     * @param string $sql
+     * @param array<int|string, mixed> $bindings
+     * @return bool
+     */
+    public function statement(string $sql, array $bindings = []): bool
+    {
+        return $this->getPdo()->prepare($sql)->execute($bindings);
+    }
+
+    /**
+     * Execute a Closure within a database transaction.
+     *
+     * @param callable $callback
+     * @return mixed
+     * @throws \Throwable
+     */
+    public function transaction(callable $callback): mixed
+    {
+        $pdo = $this->getPdo();
+        
+        $pdo->beginTransaction();
+
+        try {
+            $result = $callback($this);
+            $pdo->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $pdo->rollBack();
+            throw $e;
+        }
+    }
+
+    /**
+     * Begin a fluent query against a database table.
+     *
+     * @param string $table
+     * @return QueryBuilder
+     */
+    public function table(string $table): QueryBuilder
+    {
+        return new QueryBuilder($this, new \Switch\Database\Query\Grammar(), $table);
+    }
+}
