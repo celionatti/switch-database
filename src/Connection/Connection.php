@@ -35,6 +35,62 @@ class Connection
     }
 
     /**
+     * Create a PostgreSQL connection.
+     */
+    public static function postgres(
+        string $database,
+        string $host = '127.0.0.1',
+        int $port = 5432,
+        string $username = 'postgres',
+        string $password = '',
+        array $options = []
+    ): self {
+        return new self(new ConnectionConfig(
+            driver: 'pgsql',
+            host: $host,
+            port: $port,
+            database: $database,
+            username: $username,
+            password: $password,
+            options: $options
+        ));
+    }
+
+    /**
+     * Create a MySQL connection.
+     */
+    public static function mysql(
+        string $database,
+        string $host = '127.0.0.1',
+        int $port = 3306,
+        string $username = 'root',
+        string $password = '',
+        array $options = []
+    ): self {
+        return new self(new ConnectionConfig(
+            driver: 'mysql',
+            host: $host,
+            port: $port,
+            database: $database,
+            username: $username,
+            password: $password,
+            options: $options
+        ));
+    }
+
+    /**
+     * Get the appropriate SQL Grammar instance for this connection's driver.
+     */
+    public function getGrammar(): \Switch\Database\Query\Grammar
+    {
+        return match (strtolower($this->config->driver)) {
+            'pgsql', 'postgres', 'postgresql' => new \Switch\Database\Query\Grammar\PostgresGrammar(),
+            'mysql', 'mariadb' => new \Switch\Database\Query\Grammar\MySqlGrammar(),
+            default => new \Switch\Database\Query\Grammar\SqliteGrammar(),
+        };
+    }
+
+    /**
      * Get the underlying PDO instance, creating it lazily if necessary.
      *
      * @return PDO
@@ -178,6 +234,6 @@ class Connection
      */
     public function table(string $table): QueryBuilder
     {
-        return new QueryBuilder($this, new \Switch\Database\Query\Grammar(), $table);
+        return new QueryBuilder($this, $this->getGrammar(), $table);
     }
 }

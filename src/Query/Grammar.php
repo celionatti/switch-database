@@ -53,6 +53,11 @@ class Grammar
         return "INSERT INTO {$table} ({$columnsString}) VALUES {$parametersString}";
     }
 
+    public function compileInsertGetId(QueryBuilder $query, array $values, string $sequence = 'id'): string
+    {
+        return $this->compileInsert($query, $values);
+    }
+
     public function compileUpdate(QueryBuilder $query, array $values): string
     {
         $table = $this->wrapTable($query->from);
@@ -199,6 +204,26 @@ class Grammar
         return $this->wrap($where['column']) . ' LIKE ?';
     }
 
+    protected function whereILike(QueryBuilder $query, array $where): string
+    {
+        return $this->wrap($where['column']) . ' LIKE ?';
+    }
+
+    protected function whereExists(QueryBuilder $query, array $where): string
+    {
+        return 'EXISTS (' . $where['query']->toSql() . ')';
+    }
+
+    protected function whereNotExists(QueryBuilder $query, array $where): string
+    {
+        return 'NOT EXISTS (' . $where['query']->toSql() . ')';
+    }
+
+    protected function whereRaw(QueryBuilder $query, array $where): string
+    {
+        return $where['sql'];
+    }
+
     protected function compileGroups(QueryBuilder $query): string
     {
         if (empty($query->groups)) {
@@ -256,7 +281,7 @@ class Grammar
         return 'OFFSET ' . (int) $query->offset;
     }
 
-    protected function wrapTable(string|Expression $table): string
+    public function wrapTable(string|Expression $table): string
     {
         if ($table instanceof Expression) {
             return $table->getValue();
@@ -265,7 +290,7 @@ class Grammar
         return $this->wrap($table);
     }
 
-    protected function wrap(string|Expression $value): string
+    public function wrap(string|Expression $value): string
     {
         if ($value instanceof Expression) {
             return $value->getValue();
@@ -292,7 +317,7 @@ class Grammar
         return '"' . str_replace('"', '""', $value) . '"';
     }
 
-    protected function columnize(array $columns): string
+    public function columnize(array $columns): string
     {
         return implode(', ', array_map([$this, 'wrap'], $columns));
     }

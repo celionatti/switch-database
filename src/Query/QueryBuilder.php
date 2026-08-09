@@ -196,6 +196,60 @@ class QueryBuilder
         return $this;
     }
 
+    public function whereRaw(string $sql, array $bindings = []): self
+    {
+        $this->wheres[] = [
+            'type' => 'Raw',
+            'sql' => $sql,
+            'boolean' => 'and',
+        ];
+
+        if (!empty($bindings)) {
+            $this->addBinding($bindings, 'where');
+        }
+
+        return $this;
+    }
+
+    public function whereExists(QueryBuilder $query): self
+    {
+        $this->wheres[] = [
+            'type' => 'Exists',
+            'query' => $query,
+            'boolean' => 'and',
+        ];
+
+        $this->addBinding($query->getBindings(), 'where');
+
+        return $this;
+    }
+
+    public function whereNotExists(QueryBuilder $query): self
+    {
+        $this->wheres[] = [
+            'type' => 'NotExists',
+            'query' => $query,
+            'boolean' => 'and',
+        ];
+
+        $this->addBinding($query->getBindings(), 'where');
+
+        return $this;
+    }
+
+    public function whereILike(string $column, string $pattern): self
+    {
+        $this->wheres[] = [
+            'type' => 'ILike',
+            'column' => $column,
+            'boolean' => 'and',
+        ];
+
+        $this->addBinding($pattern, 'where');
+
+        return $this;
+    }
+
     public function join(string $table, string $first, string $operator, string $second): self
     {
         $join = new JoinClause('inner', $table);
@@ -354,6 +408,44 @@ class QueryBuilder
         $bindings = $this->cleanBindings($flatValues);
 
         return (int) $this->connection->insert($sql, $bindings);
+    }
+
+    public function insertGetId(array $values, string $sequence = 'id'): int|string
+    {
+        $sql = $this->grammar->compileInsertGetId($this, $values, $sequence);
+        $flatValues = is_array(reset($values)) ? array_merge(...array_map('array_values', $values)) : array_values($values);
+        $bindings = $this->cleanBindings($flatValues);
+
+        if ($this->grammar instanceof \Switch\Database\Query\Grammar\PostgresGrammar) {
+            $result = $this->connection->select($sql, $bindings);
+            return reset($result)[$sequence] ?? 0;
+        }
+
+        return $this->connection->insert($sql, $bindings);
+    }
+
+    public function __call(string $method, array $arguments): mixed
+    {
+        if (str_starts_with($method, 'where')) {
+            $finder = substr($method, 5); // e.g. "Status" or "StatusAndRole"
+            $parts = explode('And', $finder);
+
+            foreach ($parts as $index => $part) {
+                // Convert CamelCase column name to snake_case
+                $column = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $part));
+                $value = $arguments[$index] ?? null;
+                $this->where($column, '=', $value);
+            }
+
+            return $this;
+        }
+
+        if (str_starts_with($method, 'findBy')) {
+            $column = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', substr($method, 6)));
+            return $this->where($column, '=', $arguments[0] ?? null)->first();
+        }
+
+        throw new \BadMethodCallException("Method {$method} does not exist on QueryBuilder.");
     }
 
     public function update(array $values): int

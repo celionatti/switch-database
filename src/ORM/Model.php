@@ -218,6 +218,21 @@ abstract class Model
         return static::modelQuery()->chunk($count, $callback);
     }
 
+    public static function firstWhere(string $column, mixed $operatorOrValue = null, mixed $value = null): ?static
+    {
+        return static::modelQuery()->firstWhere(...func_get_args());
+    }
+
+    public function __call(string $method, array $arguments): mixed
+    {
+        return static::modelQuery()->$method(...$arguments);
+    }
+
+    public static function __callStatic(string $method, array $arguments): mixed
+    {
+        return static::modelQuery()->$method(...$arguments);
+    }
+
     public function fill(array $attributes): self
     {
         foreach ($attributes as $key => $value) {
@@ -333,6 +348,11 @@ abstract class Model
         return $dirty;
     }
 
+    public function getRawAttributes(): array
+    {
+        return $this->attributes;
+    }
+
     public function isDirty(?string $attribute = null): bool
     {
         $dirty = $this->getDirty();
@@ -345,6 +365,14 @@ abstract class Model
 
     public function getAttribute(string $key): mixed
     {
+        $studlyKey = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $key)));
+        $accessor = 'get' . $studlyKey . 'Attribute';
+
+        if (method_exists($this, $accessor)) {
+            $value = $this->attributes[$key] ?? null;
+            return $this->$accessor($value);
+        }
+
         if (!array_key_exists($key, $this->attributes)) {
             return null;
         }
@@ -360,6 +388,14 @@ abstract class Model
 
     public function setAttribute(string $key, mixed $value): self
     {
+        $studlyKey = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $key)));
+        $mutator = 'set' . $studlyKey . 'Attribute';
+
+        if (method_exists($this, $mutator)) {
+            $this->$mutator($value);
+            return $this;
+        }
+
         $this->attributes[$key] = $value;
         return $this;
     }
@@ -426,7 +462,10 @@ abstract class Model
 
     public function __get(string $key): mixed
     {
-        if (array_key_exists($key, $this->attributes)) {
+        $studlyKey = str_replace(' ', '', ucwords(str_replace(['-', '_'], ' ', $key)));
+        $accessor = 'get' . $studlyKey . 'Attribute';
+
+        if (method_exists($this, $accessor) || array_key_exists($key, $this->attributes)) {
             return $this->getAttribute($key);
         }
 

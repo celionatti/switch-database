@@ -10,12 +10,17 @@ use Switch\Database\ORM\Model;
 class BelongsTo extends Relation
 {
     public function __construct(
-        private readonly string $relatedClass,
-        private readonly string $foreignKey,
-        private readonly string $ownerKey,
+        protected readonly string $relatedClass,
+        protected readonly string $foreignKey,
+        protected readonly string $ownerKey,
         Model $parent
     ) {
         parent::__construct($parent);
+    }
+
+    public function getLocalKey(): string
+    {
+        return $this->ownerKey;
     }
 
     public function get(): ?Model

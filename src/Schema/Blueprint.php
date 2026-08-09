@@ -111,6 +111,20 @@ class Blueprint
         return $definition;
     }
 
+    public function jsonb(string $column): ColumnDefinition
+    {
+        $definition = new ColumnDefinition($column, 'jsonb');
+        $this->columns[] = $definition;
+        return $definition;
+    }
+
+    public function uuid(string $column = 'uuid'): ColumnDefinition
+    {
+        $definition = new ColumnDefinition($column, 'uuid');
+        $this->columns[] = $definition;
+        return $definition;
+    }
+
     public function enum(string $column, array $values): ColumnDefinition
     {
         $definition = new ColumnDefinition($column, 'enum', values: $values);

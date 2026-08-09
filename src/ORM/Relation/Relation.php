@@ -17,7 +17,7 @@ abstract class Relation
     abstract public function get(): mixed;
 
     /**
-     * Eager load relationship for a array of parent models in a single query.
+     * Eager load relationship for an array of parent models in a single query.
      *
      * @param array<int, Model> $models
      * @return Collection
@@ -33,4 +33,19 @@ abstract class Relation
      * @return array<int, Model>
      */
     abstract public function match(array $models, Collection $results, string $relation): array;
+
+    public function getRelated(): string
+    {
+        return $this->relatedClass;
+    }
+
+    public function getForeignKey(): string
+    {
+        return $this->foreignKey;
+    }
+
+    public function getLocalKey(): string
+    {
+        return $this->localKey;
+    }
 }

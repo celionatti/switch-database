@@ -181,26 +181,164 @@ class ModelQueryBuilder
         return new Paginator($items, $total, $perPage, $page);
     }
 
-    public function chunk(int $count, callable $callback): bool
+    public function firstWhere(string $column, mixed $operatorOrValue = null, mixed $value = null): ?Model
     {
-        $page = 1;
+        if (func_num_args() === 2) {
+            return $this->where($column, '=', $operatorOrValue)->first();
+        }
+        return $this->where($column, $operatorOrValue, $value)->first();
+    }
 
-        do {
-            $results = $this->limit($count)->offset(($page - 1) * $count)->get();
-            $countResults = count($results);
+    public function has(string $relation, string $operator = '>=', int $count = 1): self
+    {
+        $model = new ($this->modelClass)();
+        if (method_exists($model, $relation)) {
+            /** @var Relation $rel */
+            $rel = $model->$relation();
+            $relatedModel = new ($rel->getRelated())();
+            $sql = sprintf(
+                '(SELECT COUNT(*) FROM %s WHERE %s.%s = %s.%s) %s %d',
+                $relatedModel->getTable(),
+                $relatedModel->getTable(),
+                $rel->getForeignKey(),
+                $model->getTable(),
+                $rel->getLocalKey(),
+                $operator,
+                $count
+            );
+            $this->query->whereRaw($sql);
+        }
+        return $this;
+    }
 
-            if ($countResults === 0) {
-                break;
+    public function whereHas(string $relation, ?callable $callback = null): self
+    {
+        $model = new ($this->modelClass)();
+        if (method_exists($model, $relation)) {
+            /** @var Relation $rel */
+            $rel = $model->$relation();
+            $relatedModelClass = $rel->getRelated();
+            $subQueryBuilder = $relatedModelClass::query();
+
+            if ($callback !== null) {
+                $subModelQuery = new ModelQueryBuilder($subQueryBuilder, $relatedModelClass);
+                $callback($subModelQuery);
             }
 
-            if ($callback($results, $page) === false) {
-                return false;
+            $subQueryBuilder->whereRaw(
+                sprintf(
+                    '%s.%s = %s.%s',
+                    $subQueryBuilder->from,
+                    $rel->getForeignKey(),
+                    $model->getTable(),
+                    $rel->getLocalKey()
+                )
+            );
+
+            $this->query->whereExists($subQueryBuilder);
+        }
+        return $this;
+    }
+
+    public function doesntHave(string $relation): self
+    {
+        return $this->has($relation, '<', 1);
+    }
+
+    public function whereDoesntHave(string $relation, ?callable $callback = null): self
+    {
+        $model = new ($this->modelClass)();
+        if (method_exists($model, $relation)) {
+            /** @var Relation $rel */
+            $rel = $model->$relation();
+            $relatedModelClass = $rel->getRelated();
+            $subQueryBuilder = $relatedModelClass::query();
+
+            if ($callback !== null) {
+                $subModelQuery = new ModelQueryBuilder($subQueryBuilder, $relatedModelClass);
+                $callback($subModelQuery);
             }
 
-            $page++;
-        } while ($countResults === $count);
+            $subQueryBuilder->whereRaw(
+                sprintf(
+                    '%s.%s = %s.%s',
+                    $subQueryBuilder->from,
+                    $rel->getForeignKey(),
+                    $model->getTable(),
+                    $rel->getLocalKey()
+                )
+            );
 
-        return true;
+            $this->query->whereNotExists($subQueryBuilder);
+        }
+        return $this;
+    }
+
+    public function withCount(string|array $relations): self
+    {
+        $relations = is_array($relations) ? $relations : func_get_args();
+        $model = new ($this->modelClass)();
+
+        foreach ($relations as $relation) {
+            if (method_exists($model, $relation)) {
+                /** @var Relation $rel */
+                $rel = $model->$relation();
+                $relatedModel = new ($rel->getRelated())();
+                $alias = $relation . '_count';
+                $subQuery = sprintf(
+                    '(SELECT COUNT(*) FROM %s WHERE %s.%s = %s.%s) AS %s',
+                    $relatedModel->getTable(),
+                    $relatedModel->getTable(),
+                    $rel->getForeignKey(),
+                    $model->getTable(),
+                    $rel->getLocalKey(),
+                    $alias
+                );
+                $this->query->addSelect($this->query->raw($subQuery));
+            }
+        }
+
+        return $this;
+    }
+
+    public function __call(string $method, array $arguments): mixed
+    {
+        $model = new ($this->modelClass)();
+
+        // Check for Query Scope (e.g., scopeActive -> active())
+        $scopeMethod = 'scope' . ucfirst($method);
+        if (method_exists($model, $scopeMethod)) {
+            $result = $model->$scopeMethod($this, ...$arguments);
+            return $result instanceof self ? $result : $this;
+        }
+
+        // Dynamic Finders (e.g. findByEmail -> where('email', $value)->first())
+        if (str_starts_with($method, 'findBy')) {
+            $column = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', substr($method, 6)));
+            return $this->where($column, '=', $arguments[0] ?? null)->first();
+        }
+
+        // Dynamic Wheres (e.g. whereStatusAndRole -> where('status', $val1)->where('role', $val2))
+        if (str_starts_with($method, 'where') && $method !== 'where') {
+            $finder = substr($method, 5);
+            $parts = explode('And', $finder);
+
+            foreach ($parts as $index => $part) {
+                $column = strtolower(preg_replace('/(?<!^)[A-Z]/', '_$0', $part));
+                $value = $arguments[$index] ?? null;
+                $this->where($column, '=', $value);
+            }
+
+            return $this;
+        }
+
+        // Forward to underlying QueryBuilder
+        $result = $this->query->$method(...$arguments);
+        if ($result === $this->query) {
+            return $this;
+        }
+
+        return $result;
     }
 
     /**

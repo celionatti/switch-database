@@ -10,9 +10,9 @@ use Switch\Database\ORM\Model;
 class HasOne extends Relation
 {
     public function __construct(
-        private readonly string $relatedClass,
-        private readonly string $foreignKey,
-        private readonly string $localKey,
+        protected readonly string $relatedClass,
+        protected readonly string $foreignKey,
+        protected readonly string $localKey,
         Model $parent
     ) {
         parent::__construct($parent);
