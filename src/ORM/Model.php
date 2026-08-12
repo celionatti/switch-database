@@ -41,6 +41,11 @@ abstract class Model
         self::$connection = $connection;
     }
 
+    public static function hasConnection(): bool
+    {
+        return self::$connection !== null;
+    }
+
     public static function getConnection(): Connection
     {
         if (self::$connection === null) {

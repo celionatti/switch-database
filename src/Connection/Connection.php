@@ -21,6 +21,17 @@ class Connection
     }
 
     /**
+     * Create a Connection instance from a configuration array.
+     *
+     * @param array<string, mixed> $config
+     * @return self
+     */
+    public static function fromArray(array $config): self
+    {
+        return new self(ConnectionConfig::fromArray($config));
+    }
+
+    /**
      * Create a quick SQLite connection.
      *
      * @param string $path SQLite database path or ':memory:'
