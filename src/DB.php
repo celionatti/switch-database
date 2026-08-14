@@ -72,7 +72,7 @@ class DB
      *
      * @param array<string, mixed> $bindings
      */
-    public static function insert(string $query, array $bindings = []): bool
+    public static function insert(string $query, array $bindings = []): int|string|bool
     {
         return self::connection()->insert($query, $bindings);
     }
