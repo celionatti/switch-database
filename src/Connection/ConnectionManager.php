@@ -10,6 +10,29 @@ use RuntimeException;
 class ConnectionManager
 {
     /**
+     * The singleton instance.
+     *
+     * @var self|null
+     */
+    private static ?self $instance = null;
+
+    /**
+     * Get or create the global singleton instance.
+     */
+    public static function getInstance(): self
+    {
+        return self::$instance ??= new self();
+    }
+
+    /**
+     * Set the global singleton instance.
+     */
+    public static function setInstance(?self $instance): void
+    {
+        self::$instance = $instance;
+    }
+
+    /**
      * The configured database connections.
      *
      * @var array<string, ConnectionConfig>

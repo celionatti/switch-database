@@ -75,4 +75,22 @@ class ConnectionTest extends TestCase
         $this->assertInstanceOf(Connection::class, $conn);
         $this->assertSame($conn, $manager->connection());
     }
+
+    public function testConnectionManagerSingletonAndDbFacade(): void
+    {
+        $instance = ConnectionManager::getInstance();
+        $this->assertInstanceOf(ConnectionManager::class, $instance);
+        $this->assertSame($instance, ConnectionManager::getInstance());
+
+        $instance->addConnection('default', [
+            'driver' => 'sqlite',
+            'database' => ':memory:',
+        ]);
+
+        \Switch\Database\DB::setConnection($instance->connection('default'));
+        \Switch\Database\DB::select('SELECT 1 as val');
+
+        $this->assertInstanceOf(\PDO::class, \Switch\Database\DB::getPdo());
+        $this->assertInstanceOf(\Switch\Database\Query\QueryBuilder::class, \Switch\Database\DB::table('users'));
+    }
 }
