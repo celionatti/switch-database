@@ -4,117 +4,92 @@ declare(strict_types=1);
 
 namespace Switch\Database\ORM;
 
-use ArrayAccess;
-use ArrayIterator;
-use Countable;
-use IteratorAggregate;
-use Traversable;
+use Switch\Foundation\Collection\Collection as BaseCollection;
 
-class Collection implements Countable, IteratorAggregate, ArrayAccess
+/**
+ * Database Eloquent-style Model Collection.
+ *
+ * @template TKey of array-key
+ * @template TModel of Model
+ * @extends BaseCollection<TKey, TModel>
+ */
+class Collection extends BaseCollection
 {
     /**
-     * @param array<int|string, mixed> $items
+     * Find a model in the collection by its primary key.
      */
-    public function __construct(protected array $items = [])
+    public function find(mixed $key, mixed $default = null): ?Model
     {
-    }
-
-    public function all(): array
-    {
-        return $this->items;
-    }
-
-    public function first(): ?object
-    {
-        return $this->items[array_key_first($this->items)] ?? null;
-    }
-
-    public function last(): ?object
-    {
-        return $this->items[array_key_last($this->items)] ?? null;
-    }
-
-    public function map(callable $callback): self
-    {
-        return new self(array_map($callback, $this->items));
-    }
-
-    public function filter(callable $callback): self
-    {
-        return new self(array_filter($this->items, $callback));
-    }
-
-    public function pluck(string $key, ?string $valueKey = null): array
-    {
-        $results = [];
-
-        foreach ($this->items as $item) {
-            $itemValue = is_object($item) ? $item->$key : $item[$key];
-
-            if ($valueKey === null) {
-                $results[] = $itemValue;
-            } else {
-                $itemKey = is_object($item) ? $item->$valueKey : $item[$valueKey];
-                $results[$itemKey] = $itemValue;
-            }
+        if ($key instanceof Model) {
+            $key = $key->getKey();
         }
 
-        return $results;
+        if (is_array($key)) {
+            if ($this->isEmpty()) {
+                return null;
+            }
+
+            return $this->whereIn($this->first()->getKeyName(), $key);
+        }
+
+        return $this->first(function ($model) use ($key) {
+            return $model instanceof Model && $model->getKey() == $key;
+        }, $default);
     }
 
-    public function count(): int
+    /**
+     * Get an array with the values of a given column / model keys.
+     */
+    public function modelKeys(): array
     {
-        return count($this->items);
-    }
-
-    public function isEmpty(): bool
-    {
-        return empty($this->items);
-    }
-
-    public function isNotEmpty(): bool
-    {
-        return ! $this->isEmpty();
-    }
-
-    public function toArray(): array
-    {
-        return array_map(function ($item) {
-            return method_exists($item, 'toArray') ? $item->toArray() : $item;
+        return array_map(function ($model) {
+            return $model instanceof Model ? $model->getKey() : null;
         }, $this->items);
     }
 
-    public function toJson(int $options = 0): string
+    /**
+     * Load a set of relationships onto the collection.
+     */
+    public function load(string|array ...$relations): static
     {
-        return json_encode($this->toArray(), $options) ?: '';
-    }
-
-    public function getIterator(): Traversable
-    {
-        return new ArrayIterator($this->items);
-    }
-
-    public function offsetExists(mixed $offset): bool
-    {
-        return isset($this->items[$offset]);
-    }
-
-    public function offsetGet(mixed $offset): mixed
-    {
-        return $this->items[$offset] ?? null;
-    }
-
-    public function offsetSet(mixed $offset, mixed $value): void
-    {
-        if ($offset === null) {
-            $this->items[] = $value;
-        } else {
-            $this->items[$offset] = $value;
+        if ($this->isNotEmpty()) {
+            $first = $this->first();
+            if ($first instanceof Model) {
+                $query = $first->newQuery()->with(...$relations);
+                $query->eagerLoadRelations($this->items);
+            }
         }
+
+        return $this;
     }
 
-    public function offsetUnset(mixed $offset): void
+    /**
+     * Load a set of relationships onto the collection if not already loaded.
+     */
+    public function loadMissing(string|array ...$relations): static
     {
-        unset($this->items[$offset]);
+        return $this->load(...$relations);
+    }
+
+    /**
+     * Reload a fresh model instance from the database for all the entities.
+     */
+    public function fresh(array|string ...$with): static
+    {
+        if ($this->isEmpty()) {
+            return new static();
+        }
+
+        $model = $this->first();
+        if (!$model instanceof Model) {
+            return new static();
+        }
+
+        $freshModels = $model->newQuery()
+            ->whereIn($model->getKeyName(), $this->modelKeys())
+            ->with(...$with)
+            ->get();
+
+        return new static($freshModels);
     }
 }
