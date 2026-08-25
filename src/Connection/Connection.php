@@ -15,6 +15,34 @@ class Connection
 {
     private ?PDO $pdo = null;
     
+    /**
+     * @var array<int, callable>
+     */
+    private static array $queryListeners = [];
+
+    /**
+     * Register a callback to listen for executed queries.
+     *
+     * @param callable(string, array, float, string): void $callback
+     */
+    public static function listen(callable $callback): void
+    {
+        self::$queryListeners[] = $callback;
+    }
+
+    /**
+     * Clear all registered query listeners.
+     */
+    public static function resetListeners(): void
+    {
+        self::$queryListeners = [];
+    }
+
+    public function getConfig(): ConnectionConfig
+    {
+        return $this->config;
+    }
+    
     public function __construct(
         private readonly ConnectionConfig $config
     ) {
@@ -146,9 +174,21 @@ class Connection
      */
     public function query(string $sql, array $bindings = []): PDOStatement
     {
+        if (empty(self::$queryListeners)) {
+            $statement = $this->getPdo()->prepare($sql);
+            $statement->execute($bindings);
+            return $statement;
+        }
+
+        $start = microtime(true);
         $statement = $this->getPdo()->prepare($sql);
         $statement->execute($bindings);
-        
+        $timeMs = (microtime(true) - $start) * 1000;
+
+        foreach (self::$queryListeners as $listener) {
+            $listener($sql, $bindings, $timeMs, $this->config->driver ?? 'default');
+        }
+
         return $statement;
     }
 
@@ -211,7 +251,19 @@ class Connection
      */
     public function statement(string $sql, array $bindings = []): bool
     {
-        return $this->getPdo()->prepare($sql)->execute($bindings);
+        if (empty(self::$queryListeners)) {
+            return $this->getPdo()->prepare($sql)->execute($bindings);
+        }
+
+        $start = microtime(true);
+        $result = $this->getPdo()->prepare($sql)->execute($bindings);
+        $timeMs = (microtime(true) - $start) * 1000;
+
+        foreach (self::$queryListeners as $listener) {
+            $listener($sql, $bindings, $timeMs, $this->config->driver ?? 'default');
+        }
+
+        return $result;
     }
 
     /**
