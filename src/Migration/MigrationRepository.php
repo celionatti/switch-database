@@ -8,6 +8,8 @@ use Switch\Database\Connection\Connection;
 
 class MigrationRepository
 {
+    private ?bool $repositoryExistsCache = null;
+
     public function __construct(private readonly Connection $connection)
     {
     }
@@ -21,10 +23,15 @@ class MigrationRepository
                 batch INTEGER NOT NULL
             )"
         );
+        $this->repositoryExistsCache = true;
     }
 
     public function repositoryExists(): bool
     {
+        if ($this->repositoryExistsCache !== null) {
+            return $this->repositoryExistsCache;
+        }
+
         $pdo = $this->connection->getPdo();
         $driver = $pdo->getAttribute(\PDO::ATTR_DRIVER_NAME);
 
@@ -32,13 +39,13 @@ class MigrationRepository
             $result = $this->connection->select(
                 "SELECT name FROM sqlite_master WHERE type='table' AND name='migrations'"
             );
-            return !empty($result);
+            return $this->repositoryExistsCache = !empty($result);
         }
 
         $result = $this->connection->select(
             "SELECT table_name FROM information_schema.tables WHERE table_name = 'migrations'"
         );
-        return !empty($result);
+        return $this->repositoryExistsCache = !empty($result);
     }
 
     public function log(string $migration, int $batch): void
