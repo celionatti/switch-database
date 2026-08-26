@@ -86,15 +86,20 @@ abstract class Model
         return $this->softDeletes;
     }
 
-    public static function query(): QueryBuilder
+    public static function rawQuery(): QueryBuilder
     {
         $model = new static();
         return self::getConnection()->table($model->getTable());
     }
 
+    public static function query(): ModelQueryBuilder
+    {
+        return new ModelQueryBuilder(static::rawQuery(), static::class);
+    }
+
     public static function modelQuery(): ModelQueryBuilder
     {
-        return new ModelQueryBuilder(static::query(), static::class);
+        return static::query();
     }
 
     public static function with(string|array $relations): ModelQueryBuilder
@@ -264,7 +269,7 @@ abstract class Model
 
     public function save(): bool
     {
-        $query = self::query();
+        $query = self::rawQuery();
 
         if ($this->timestamps) {
             $now = date('Y-m-d H:i:s');
@@ -274,18 +279,21 @@ abstract class Model
             $this->attributes[static::UPDATED_AT] = $now;
         }
 
+        $preparedAttributes = $this->dehydrateAttributes($this->attributes);
+
         if ($this->exists) {
             $dirty = $this->getDirty();
             if (empty($dirty)) {
                 return true;
             }
 
-            $affected = $query->where($this->primaryKey, '=', $this->getKey())->update($dirty);
+            $preparedDirty = $this->dehydrateAttributes($dirty);
+            $affected = $query->where($this->primaryKey, '=', $this->getKey())->update($preparedDirty);
             $this->original = $this->attributes;
             return $affected > 0;
         }
 
-        $id = $query->insert($this->attributes);
+        $id = $query->insert($preparedAttributes);
         if ($id) {
             $this->attributes[$this->primaryKey] = $id;
             $this->exists = true;
@@ -294,6 +302,24 @@ abstract class Model
         }
 
         return false;
+    }
+
+    /**
+     * Prepare attributes for database storage by encoding casted types.
+     */
+    private function dehydrateAttributes(array $attributes): array
+    {
+        foreach ($attributes as $key => $value) {
+            if (isset($this->casts[$key])) {
+                $castType = strtolower($this->casts[$key]);
+                if (in_array($castType, ['json', 'array'], true) && (is_array($value) || is_object($value))) {
+                    $attributes[$key] = json_encode($value);
+                } elseif (in_array($castType, ['bool', 'boolean'], true)) {
+                    $attributes[$key] = $value ? 1 : 0;
+                }
+            }
+        }
+        return $attributes;
     }
 
     public function delete(): bool
@@ -307,7 +333,7 @@ abstract class Model
             return $this->save();
         }
 
-        $affected = self::query()->where($this->primaryKey, '=', $this->getKey())->delete();
+        $affected = self::rawQuery()->where($this->primaryKey, '=', $this->getKey())->delete();
         if ($affected > 0) {
             $this->exists = false;
             return true;
@@ -332,7 +358,7 @@ abstract class Model
             return false;
         }
 
-        $affected = self::query()->where($this->primaryKey, '=', $this->getKey())->delete();
+        $affected = self::rawQuery()->where($this->primaryKey, '=', $this->getKey())->delete();
         if ($affected > 0) {
             $this->exists = false;
             return true;

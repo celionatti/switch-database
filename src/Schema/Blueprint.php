@@ -55,6 +55,27 @@ class Blueprint
         return $definition;
     }
 
+    public function unsignedBigInteger(string $column): ColumnDefinition
+    {
+        $definition = new ColumnDefinition($column, 'bigint');
+        $this->columns[] = $definition;
+        return $definition;
+    }
+
+    public function unsignedInteger(string $column): ColumnDefinition
+    {
+        $definition = new ColumnDefinition($column, 'integer');
+        $this->columns[] = $definition;
+        return $definition;
+    }
+
+    public function foreignId(string $column): ColumnDefinition
+    {
+        $definition = new ColumnDefinition($column, 'bigint');
+        $this->columns[] = $definition;
+        return $definition;
+    }
+
     public function tinyInteger(string $column): ColumnDefinition
     {
         $definition = new ColumnDefinition($column, 'tinyint');

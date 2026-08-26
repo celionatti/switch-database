@@ -32,7 +32,7 @@ class BelongsTo extends Relation
 
         /** @var class-string<Model> $related */
         $related = $this->relatedClass;
-        return $related::where($this->ownerKey, $foreignValue)->firstModel();
+        return $related::where($this->ownerKey, $foreignValue)->first();
     }
 
     public function getEager(array $models): Collection

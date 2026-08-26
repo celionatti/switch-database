@@ -31,6 +31,36 @@ class Paginator implements Countable, IteratorAggregate
         $this->lastPage = (int) ceil($this->total / $this->perPage);
     }
 
+    public function items(): mixed
+    {
+        return $this->items;
+    }
+
+    public function total(): int
+    {
+        return $this->total;
+    }
+
+    public function perPage(): int
+    {
+        return $this->perPage;
+    }
+
+    public function currentPage(): int
+    {
+        return $this->currentPage;
+    }
+
+    public function lastPage(): int
+    {
+        return $this->lastPage;
+    }
+
+    public function hasPages(): bool
+    {
+        return $this->lastPage > 1;
+    }
+
     public function hasMorePages(): bool
     {
         return $this->currentPage < $this->lastPage;
