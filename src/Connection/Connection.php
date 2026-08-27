@@ -42,6 +42,11 @@ class Connection
     {
         return $this->config;
     }
+
+    public function getDriverName(): string
+    {
+        return $this->config->driver;
+    }
     
     public function __construct(
         private readonly ConnectionConfig $config
